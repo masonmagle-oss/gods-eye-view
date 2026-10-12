@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fresh,valid,dispatch,recall,tick,quote,buyFuel,evaluate,conservation,CONTRACTS} from './rules.js';
+const advance=(s,n)=>{for(let i=0;i<n;i++)tick(s,1);};
+function strategy(contract){const s=fresh(contract);if(contract==='economy'){dispatch(s,3,'north');dispatch(s,4,'north');dispatch(s,5,'east');dispatch(s,2,'east');}else{buyFuel(s);for(let i=0;i<6;i++)dispatch(s,i,[0,1,3].includes(i)?'north':'east');}for(let time=0;time<CONTRACTS[contract].limit&&s.economy.outcome==='active';time++){if(s.economy.fuel<20&&s.economy.money>=60)buyFuel(s);for(const u of s.units)if(u.phase==='idle'&&u.target&&s.delivered[u.target]<CONTRACTS[contract].goal)dispatch(s,u.id,u.target,true);tick(s,1);}return s;}
+test('all contract states validate',()=>{for(const id of Object.keys(CONTRACTS))assert.ok(valid(fresh(id)));});
+test('dispatch reserves full-roundtrip fuel and fee',()=>{const s=fresh();dispatch(s,0,'north');assert.equal(s.economy.money,1110);assert.equal(s.economy.fuel,62);assert.equal(conservation(s),400);});
+test('unaffordable departure changes nothing',()=>{const s=fresh();s.economy.fuel=0;const before=JSON.stringify(s);assert.equal(dispatch(s,0,'north'),false);assert.equal(JSON.stringify(s),before);});
+test('fuel packs cannot overdraw cash',()=>{const s=fresh();s.economy.money=59;assert.equal(buyFuel(s),false);assert.equal(s.economy.money,59);});
+test('delivery reimbursement occurs only after unloading',()=>{const s=fresh('rapid');dispatch(s,0,'east',false);advance(s,60);assert.equal(s.economy.money,810);advance(s,6);assert.equal(s.economy.money,870);});
+test('critical deadline is a terminal loss',()=>{const s=fresh();advance(s,121);assert.equal(s.economy.outcome,'lost');assert.match(s.economy.reason,/emergency/);});
+test('overall deadline causes loss',()=>{const s=fresh('rapid');advance(s,301);assert.equal(s.economy.outcome,'lost');assert.match(s.economy.reason,/clock/);});
+test('budget failure waits for deliveries in transit',()=>{const s=fresh('rapid');dispatch(s,0,'east',false);s.economy.money=0;advance(s,5);assert.equal(s.economy.outcome,'active');});
+test('stranded fuel has a specific loss reason',()=>{const s=fresh('rapid');s.economy.money=55;s.economy.fuel=0;evaluate(s);assert.equal(s.economy.outcome,'lost');assert.match(s.economy.reason,/Fuel/);});
+test('zero operating budget has a specific loss reason',()=>{const s=fresh('rapid');s.economy.money=0;evaluate(s);assert.equal(s.economy.outcome,'lost');assert.match(s.economy.reason,/budget/);});
+test('unrecoverable wrong-hub allocation loses',()=>{const s=fresh('rapid');s.supply=0;s.delivered.north=400;evaluate(s);assert.equal(s.economy.outcome,'lost');assert.match(s.economy.reason,/Cargo/);});
+test('cash-reserve victory allows buying missing fuel',()=>{const s=fresh('economy');s.delivered={north:80,east:80};s.economy.fuel=0;evaluate(s);assert.equal(s.economy.outcome,'active');buyFuel(s);assert.equal(s.economy.outcome,'won');});
+test('recall never deletes cargo or refunds reserved fuel',()=>{const s=fresh('rapid');dispatch(s,0,'east');recall(s,0);advance(s,140);assert.equal(s.units[0].phase,'idle');assert.equal(s.delivered.east,15);assert.equal(s.economy.fuel,52);assert.equal(conservation(s),400);});
+test('ended missions stop their clocks and reject spending',()=>{const s=fresh();advance(s,121);const time=s.time;tick(s,5);assert.equal(s.time,time);assert.equal(buyFuel(s),false);assert.equal(dispatch(s,0,'east'),false);});
+test('unpaid repeats do not leave the base',()=>{const s=fresh('rapid');dispatch(s,0,'east');s.economy.fuel=0;advance(s,130);assert.equal(s.units[0].phase,'idle');assert.equal(s.delivered.east,15);assert.equal(conservation(s),400);});
+for(const id of Object.keys(CONTRACTS))test(id+' has a demonstrated winning strategy',()=>{const s=strategy(id);assert.equal(s.economy.outcome,'won',JSON.stringify(s.economy));assert.equal(conservation(s),400);assert.ok(s.economy.money>=0&&s.economy.fuel>=0);});

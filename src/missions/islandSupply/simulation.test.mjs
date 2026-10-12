@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fresh,valid,dispatch,recall,tick,position,conservation} from './simulation.js';
+const advance=(s,seconds)=>{for(let n=0;n<seconds;n++)tick(s,1);};
+test('six simulated units validate',()=>assert.ok(valid(fresh())));
+test('dispatch reserves cargo',()=>{const s=fresh();dispatch(s,0,'north');assert.equal(s.supply,385);assert.equal(conservation(s),400);});
+test('busy units cannot be reassigned',()=>{const s=fresh();dispatch(s,0,'north');assert.equal(dispatch(s,0,'east'),false);});
+test('movement interpolates',()=>{const s=fresh();dispatch(s,0,'east');advance(s,30);const p=position(s.units[0]);assert.ok(p.lon>-157.9&&p.lon<-156.47);assert.equal(s.delivered.east,0);});
+test('delivery waits for unloading',()=>{const s=fresh();dispatch(s,0,'east',false);advance(s,66);assert.equal(s.delivered.east,15);assert.equal(conservation(s),400);});
+test('safe recall delivers and stops',()=>{const s=fresh();dispatch(s,0,'east');recall(s,0);advance(s,140);assert.equal(s.units[0].phase,'idle');assert.equal(s.delivered.east,15);});
+test('one berth queues units',()=>{const s=fresh();dispatch(s,0,'east');dispatch(s,1,'east');advance(s,61);assert.equal(s.units.filter(u=>u.phase==='unloading').length,1);assert.equal(s.units.filter(u=>u.phase==='queued').length,1);});
+test('repeat routes complete mission and conserve cargo',()=>{const s=fresh();for(let i=0;i<6;i++)dispatch(s,i,i%2?'north':'east');advance(s,1000);assert.ok(s.complete);assert.equal(conservation(s),400);assert.ok(valid(s));});

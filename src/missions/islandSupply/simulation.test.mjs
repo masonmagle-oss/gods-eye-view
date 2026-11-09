@@ -10,3 +10,5 @@ test('delivery waits for unloading',()=>{const s=fresh();dispatch(s,0,'east',fal
 test('safe recall delivers and stops',()=>{const s=fresh();dispatch(s,0,'east');recall(s,0);advance(s,140);assert.equal(s.units[0].phase,'idle');assert.equal(s.delivered.east,15);});
 test('one berth queues units',()=>{const s=fresh();dispatch(s,0,'east');dispatch(s,1,'east');advance(s,61);assert.equal(s.units.filter(u=>u.phase==='unloading').length,1);assert.equal(s.units.filter(u=>u.phase==='queued').length,1);});
 test('repeat routes complete mission and conserve cargo',()=>{const s=fresh();for(let i=0;i<6;i++)dispatch(s,i,i%2?'north':'east');advance(s,1000);assert.ok(s.complete);assert.equal(conservation(s),400);assert.ok(valid(s));});
+
+test('damaged saves reject null units and moving units without a destination',()=>{const s=fresh();s.units[0]=null;assert.equal(valid(s),false);const moving=fresh();dispatch(moving,0,'north');moving.units[0].target=null;assert.equal(valid(moving),false);});

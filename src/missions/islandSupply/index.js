@@ -1,5 +1,9 @@
 import * as C from 'cesium';
 import {
+  setOverlayEntries,
+  clearOverlaySource,
+} from '../../overlays/worldOverlay.js';
+import {
   hubs,
   fresh,
   valid,
@@ -14,6 +18,7 @@ import {
 } from './rules.js';
 export function mountIslandSupply(viewer) {
   const key = 'gev-island-supply-v2';
+  const overlaySource = 'island-supply';
   let state = fresh(),
     selected = 0,
     paused = true,
@@ -52,13 +57,6 @@ export function mountIslandSupply(viewer) {
         outlineWidth: 2,
         disableDepthTestDistance: Infinity,
       },
-      label: {
-        text: 'SIM ' + h.name,
-        font: '14px sans-serif',
-        pixelOffset: new C.Cartesian2(0, -24),
-        showBackground: true,
-        disableDepthTestDistance: Infinity,
-      },
     });
   for (const u of state.units) {
     const name = (u.kind === 'aircraft' ? 'Aircraft ' : 'Vessel ') + (u.id + 1);
@@ -72,13 +70,6 @@ export function mountIslandSupply(viewer) {
           color: u.kind === 'aircraft' ? C.Color.CYAN : C.Color.ORANGE,
           outlineColor: C.Color.WHITE,
           outlineWidth: 1,
-          disableDepthTestDistance: Infinity,
-        },
-        label: {
-          text: 'SIM ' + name,
-          font: '12px sans-serif',
-          pixelOffset: new C.Cartesian2(0, 18),
-          showBackground: true,
           disableDepthTestDistance: Infinity,
         },
       }),
@@ -153,8 +144,9 @@ export function mountIslandSupply(viewer) {
         );
     }
     for (const x of state.units) {
+      const repeatWaiting = x.phase === 'idle' && x.repeat && x.target;
       q('is-unit-text-' + x.id).textContent =
-        `${x.kind} ${x.id + 1}: ${x.phase}, ${x.cargo} cargo${x.target ? ' → ' + x.target : ''}${x.phase === 'idle' && x.repeat && x.target ? ' (repeat waiting)' : ''}`;
+        `${x.kind} ${x.id + 1}: ${x.phase}, ${x.cargo} cargo${x.target ? ' → ' + x.target : ''}${repeatWaiting ? ' (repeat waiting)' : ''}`;
       const b = q('is-units').querySelector(`[data-id='${x.id}']`);
       b.classList.toggle('selected', x.id === selected);
       b.textContent = x.id === selected ? 'Selected' : 'Select';
@@ -187,6 +179,21 @@ export function mountIslandSupply(viewer) {
     q('is-recall').disabled = e.outcome !== 'active';
     q('is-pause').disabled = e.outcome !== 'active';
     q('is-pause').textContent = paused ? 'Start / Resume' : 'Pause';
+    setOverlayEntries(overlaySource, [
+      ...hubs.map((h) => ({
+        id: 'hub-' + h.id,
+        title: 'SIM ' + h.name,
+        position: C.Cartesian3.fromDegrees(h.lon, h.lat, 50),
+      })),
+      ...state.units.map((x) => ({
+        id: 'unit-' + x.id,
+        title: 'SIM ' + x.kind + ' ' + (x.id + 1),
+        position: entities
+          .get(x.id)
+          .position.getValue(viewer.clock.currentTime),
+        selected: x.id === selected,
+      })),
+    ]);
     viewer.scene.requestRender();
   }
   const removeSelection = viewer.selectedEntityChanged.addEventListener(
@@ -261,10 +268,19 @@ export function mountIslandSupply(viewer) {
     if ([...entities.values()].includes(viewer.trackedEntity))
       viewer.trackedEntity = undefined;
     if (!viewer.isDestroyed()) viewer.dataSources.remove(source, true);
+    clearOverlaySource(overlaySource);
     panel.remove();
-    window.removeEventListener('pagehide', destroy);
+    window.removeEventListener('pagehide', onPageHide);
   }
-  window.addEventListener('pagehide', destroy);
+  function onPageHide(event) {
+    if (!event.persisted) return destroy();
+    // Back/forward cache restores this same DOM and JS instance, not a new mount.
+    paused = true;
+    last = performance.now();
+    save();
+    render();
+  }
+  window.addEventListener('pagehide', onPageHide);
   overview();
   render();
   return { destroy };

@@ -39,12 +39,16 @@ export function valid(s) {
     s.units.length === 6 &&
     s.units.every(
       (u, i) =>
+        u &&
         u.id === i &&
         u.kind === (i < 3 ? 'aircraft' : 'vessel') &&
         ['idle', 'outbound', 'queued', 'unloading', 'returning'].includes(
           u.phase,
         ) &&
-        [null, 'north', 'east'].includes(u.target) &&
+        (u.phase === 'idle'
+          ? [null, 'north', 'east'].includes(u.target)
+          : ['north', 'east'].includes(u.target)) &&
+        typeof u.repeat === 'boolean' &&
         Number.isFinite(u.cargo) &&
         u.cargo >= 0 &&
         u.cargo <= (i < 3 ? 15 : 30) &&

@@ -15,11 +15,36 @@ application
       'island-supply'
     )
       return;
+    let mission = null;
+    let cancelled = false;
+    let unsubscribe = () => {};
+    function disposeMission() {
+      cancelled = true;
+      const mounted = mission;
+      mission = null;
+      unsubscribe();
+      mounted?.destroy();
+    }
+    unsubscribe = application.subscribe(({ status }) => {
+      if (['destroying', 'destroyed', 'failed'].includes(status))
+        disposeMission();
+    });
+    if (cancelled) {
+      unsubscribe();
+      return;
+    }
     try {
       const { mountIslandSupply } =
         await import('./missions/islandSupply/index.js');
-      mountIslandSupply(scene.viewer);
+      if (cancelled || application.getState().status !== 'ready') {
+        disposeMission();
+        return;
+      }
+      mission = mountIslandSupply(scene.viewer);
+      // A mount can synchronously cause application teardown via its observers.
+      if (cancelled) disposeMission();
     } catch (error) {
+      disposeMission();
       console.error(
         'Island Supply failed; original dashboard remains available:',
         error,

@@ -38,8 +38,10 @@ export const CONTRACTS = {
     reserveFuel: 20,
   },
 };
+const isContract = (name) =>
+  typeof name === 'string' && Object.hasOwn(CONTRACTS, name);
 export function fresh(contract = 'relief') {
-  if (!CONTRACTS[contract]) contract = 'relief';
+  if (!isContract(contract)) contract = 'relief';
   const s = core.fresh(),
     c = CONTRACTS[contract];
   s.economy = {
@@ -60,7 +62,7 @@ export function valid(s) {
   return (
     core.valid(s) &&
     e &&
-    CONTRACTS[e.contract] &&
+    isContract(e.contract) &&
     ['money', 'fuel', 'spent', 'fuelBought', 'income'].every(
       (k) => Number.isFinite(e[k]) && e[k] >= 0,
     ) &&

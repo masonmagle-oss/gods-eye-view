@@ -19,3 +19,10 @@ test('recall never deletes cargo or refunds reserved fuel',()=>{const s=fresh('r
 test('ended missions stop their clocks and reject spending',()=>{const s=fresh();advance(s,121);const time=s.time;tick(s,5);assert.equal(s.time,time);assert.equal(buyFuel(s),false);assert.equal(dispatch(s,0,'east'),false);});
 test('unpaid repeats do not leave the base',()=>{const s=fresh('rapid');dispatch(s,0,'east');s.economy.fuel=0;advance(s,130);assert.equal(s.units[0].phase,'idle');assert.equal(s.delivered.east,15);assert.equal(conservation(s),400);});
 for(const id of Object.keys(CONTRACTS))test(id+' has a demonstrated winning strategy',()=>{const s=strategy(id);assert.equal(s.economy.outcome,'won',JSON.stringify(s.economy));assert.equal(conservation(s),400);assert.ok(s.economy.money>=0&&s.economy.fuel>=0);});
+
+test('contract names must be own string keys, never inherited or coerced names',()=>{
+  for(const name of ['constructor','toString','__proto__','hasOwnProperty','',null,{},['relief'],new String('rapid')]){
+    const s=fresh(name);assert.equal(s.economy.contract,'relief');assert.ok(valid(s));
+    const saved=fresh();saved.economy.contract=name;assert.equal(valid(saved),false);
+  }
+});

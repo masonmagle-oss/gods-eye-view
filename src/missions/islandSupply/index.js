@@ -271,6 +271,7 @@ export function mountIslandSupply(viewer) {
     clearOverlaySource(overlaySource);
     panel.remove();
     window.removeEventListener('pagehide', onPageHide);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
   }
   function onPageHide(event) {
     if (!event.persisted) return destroy();
@@ -280,6 +281,12 @@ export function mountIslandSupply(viewer) {
     save();
     render();
   }
+  function onVisibilityChange() {
+    // Hidden timers may be suspended entirely; never bill that gap on return.
+    last = performance.now();
+    if (document.hidden) save();
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pagehide', onPageHide);
   overview();
   render();
